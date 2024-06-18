@@ -31,6 +31,9 @@ func RendezvousDialer(ctx context.Context, address string) (net.Conn, error) {
 		return nil, err
 	}
 
+	// stream is not tied to dial context
+	ctx = context.Background()
+
 	stream, err := rendezvous.Stream(metadata.AppendToOutgoingContext(ctx, "stream", resp.Stream))
 	if err != nil {
 		return nil, err
@@ -45,7 +48,7 @@ func RendezvousDialer(ctx context.Context, address string) (net.Conn, error) {
 
 func main() {
 	client, err := grpc.NewClient(
-		"dummy",
+		"unix:///dummy",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(RendezvousDialer),
 	)
