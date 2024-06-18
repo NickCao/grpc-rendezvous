@@ -6,7 +6,7 @@ import (
 	"io"
 	"net"
 
-	pb "github.com/NickCao/grpc-rendezvous/proto"
+	pb "github.com/jumpstarter-dev/jumpstarter-protocol/go/jumpstarter/v1"
 	"golang.org/x/sync/errgroup"
 )
 

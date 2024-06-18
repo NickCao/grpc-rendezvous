@@ -6,7 +6,7 @@ import (
 	"net"
 
 	st "github.com/NickCao/grpc-rendezvous/pkg/stream"
-	pb "github.com/NickCao/grpc-rendezvous/proto"
+	pb "github.com/jumpstarter-dev/jumpstarter-protocol/go/jumpstarter/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
@@ -19,9 +19,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	client := pb.NewRendezvousClient(c)
+	client := pb.NewRendezvousServiceClient(c)
 
-	listen, err := client.Listen(context.TODO(), &pb.Request{
+	listen, err := client.Listen(context.TODO(), &pb.ListenRequest{
 		Address: "dummy",
 	})
 	if err != nil {

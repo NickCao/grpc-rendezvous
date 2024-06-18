@@ -5,27 +5,27 @@ import (
 	"sync"
 
 	st "github.com/NickCao/grpc-rendezvous/pkg/stream"
-	pb "github.com/NickCao/grpc-rendezvous/proto"
 	"github.com/google/uuid"
+	pb "github.com/jumpstarter-dev/jumpstarter-protocol/go/jumpstarter/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
 type RendezvousServer struct {
-	pb.UnimplementedRendezvousServer
+	pb.UnimplementedRendezvousServiceServer
 	listenMap *sync.Map
 	streamMap *sync.Map
 }
 
 type listenCtx struct {
 	cancel context.CancelFunc
-	stream pb.Rendezvous_ListenServer
+	stream pb.RendezvousService_ListenServer
 }
 
 type streamCtx struct {
 	cancel context.CancelFunc
-	stream pb.Rendezvous_StreamServer
+	stream pb.RendezvousService_StreamServer
 }
 
 func NewRendezvousServer() *RendezvousServer {
@@ -35,7 +35,7 @@ func NewRendezvousServer() *RendezvousServer {
 	}
 }
 
-func (s *RendezvousServer) Listen(req *pb.Request, stream pb.Rendezvous_ListenServer) error {
+func (s *RendezvousServer) Listen(req *pb.ListenRequest, stream pb.RendezvousService_ListenServer) error {
 	ctx, cancel := context.WithCancel(stream.Context())
 
 	cond := listenCtx{
@@ -54,25 +54,27 @@ func (s *RendezvousServer) Listen(req *pb.Request, stream pb.Rendezvous_ListenSe
 	}
 }
 
-func (s *RendezvousServer) Dial(ctx context.Context, req *pb.Request) (*pb.Response, error) {
+func (s *RendezvousServer) Dial(ctx context.Context, req *pb.DialRequest) (*pb.DialResponse, error) {
 	value, ok := s.listenMap.Load(req.Address)
 	if !ok {
 		return nil, status.Errorf(codes.Unavailable, "no matching listener")
 	}
 
-	resp := &pb.Response{
-		Stream: uuid.New().String(),
-	}
+	stream := uuid.New().String()
 
-	err := value.(listenCtx).stream.Send(resp)
+	err := value.(listenCtx).stream.Send(&pb.ListenResponse{
+		Stream: stream,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	return resp, nil
+	return &pb.DialResponse{
+		Stream: stream,
+	}, nil
 }
 
-func (s *RendezvousServer) Stream(stream pb.Rendezvous_StreamServer) error {
+func (s *RendezvousServer) Stream(stream pb.RendezvousService_StreamServer) error {
 	ctx := stream.Context()
 
 	// extract connection id from context

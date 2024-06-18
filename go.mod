@@ -10,6 +10,7 @@ require (
 )
 
 require (
+	github.com/jumpstarter-dev/jumpstarter-protocol/go v0.0.0-20240618155227-4c23f4752533 // indirect
 	golang.org/x/net v0.22.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect

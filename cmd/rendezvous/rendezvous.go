@@ -5,7 +5,7 @@ import (
 	"net"
 
 	"github.com/NickCao/grpc-rendezvous/pkg/server"
-	pb "github.com/NickCao/grpc-rendezvous/proto"
+	pb "github.com/jumpstarter-dev/jumpstarter-protocol/go/jumpstarter/v1"
 	"google.golang.org/grpc"
 )
 
@@ -17,7 +17,7 @@ func main() {
 
 	s := grpc.NewServer()
 
-	pb.RegisterRendezvousServer(s, server.NewRendezvousServer())
+	pb.RegisterRendezvousServiceServer(s, server.NewRendezvousServer())
 
 	err = s.Serve(listen)
 	if err != nil {
