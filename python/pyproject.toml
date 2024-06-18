@@ -8,6 +8,10 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.11"
 
+[tool.poetry.dependencies.jumpstarter-protocol]
+git = "https://github.com/jumpstarter-dev/jumpstarter-protocol.git"
+branch = "wip"
+subdirectory = "python"
 
 [build-system]
 requires = ["poetry-core"]
