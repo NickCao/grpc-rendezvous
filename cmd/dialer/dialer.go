@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"log"
+	"net"
 
+	st "github.com/NickCao/grpc-rendezvous/pkg/stream"
 	pb "github.com/NickCao/grpc-rendezvous/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -11,6 +13,11 @@ import (
 )
 
 func main() {
+	listen, err := net.Listen("tcp", "127.0.0.1:8001")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	c, err := grpc.NewClient("127.0.0.1:8000",
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -19,17 +26,26 @@ func main() {
 
 	client := pb.NewRendezvousClient(c)
 
-	conn, err := client.Dial(context.TODO(), &pb.Request{
-		Address: "dummy",
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
+	for {
+		conn, err := listen.Accept()
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	ctx := metadata.NewOutgoingContext(context.TODO(), metadata.Pairs("stream", conn.Stream))
+		resp, err := client.Dial(context.TODO(), &pb.Request{
+			Address: "dummy",
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	_, err = client.Stream(ctx)
-	if err != nil {
-		log.Fatal(err)
+		ctx := metadata.NewOutgoingContext(context.TODO(), metadata.Pairs("stream", resp.Stream))
+
+		stream, err := client.Stream(ctx)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		go st.ForwardConn(ctx, stream, conn)
 	}
 }

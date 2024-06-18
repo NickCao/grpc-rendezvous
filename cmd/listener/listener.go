@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"log"
+	"net"
 
+	st "github.com/NickCao/grpc-rendezvous/pkg/stream"
 	pb "github.com/NickCao/grpc-rendezvous/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -27,16 +29,23 @@ func main() {
 	}
 
 	for {
-		conn, err := listen.Recv()
+		resp, err := listen.Recv()
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		ctx := metadata.NewOutgoingContext(context.TODO(), metadata.Pairs("stream", conn.Stream))
+		ctx := metadata.NewOutgoingContext(context.TODO(), metadata.Pairs("stream", resp.Stream))
 
-		_, err = client.Stream(ctx)
+		stream, err := client.Stream(ctx)
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		conn, err := net.Dial("tcp", "127.0.0.1:5201") // iperf3
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		go st.ForwardConn(ctx, stream, conn)
 	}
 }
