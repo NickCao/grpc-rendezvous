@@ -19,6 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
+	Rendezvous_Listen_FullMethodName = "/rendezvous.Rendezvous/Listen"
+	Rendezvous_Dial_FullMethodName   = "/rendezvous.Rendezvous/Dial"
 	Rendezvous_Stream_FullMethodName = "/rendezvous.Rendezvous/Stream"
 )
 
@@ -26,6 +28,8 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RendezvousClient interface {
+	Listen(ctx context.Context, in *Request, opts ...grpc.CallOption) (Rendezvous_ListenClient, error)
+	Dial(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	Stream(ctx context.Context, opts ...grpc.CallOption) (Rendezvous_StreamClient, error)
 }
 
@@ -37,8 +41,49 @@ func NewRendezvousClient(cc grpc.ClientConnInterface) RendezvousClient {
 	return &rendezvousClient{cc}
 }
 
+func (c *rendezvousClient) Listen(ctx context.Context, in *Request, opts ...grpc.CallOption) (Rendezvous_ListenClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Rendezvous_ServiceDesc.Streams[0], Rendezvous_Listen_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &rendezvousListenClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Rendezvous_ListenClient interface {
+	Recv() (*Response, error)
+	grpc.ClientStream
+}
+
+type rendezvousListenClient struct {
+	grpc.ClientStream
+}
+
+func (x *rendezvousListenClient) Recv() (*Response, error) {
+	m := new(Response)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *rendezvousClient) Dial(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, Rendezvous_Dial_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *rendezvousClient) Stream(ctx context.Context, opts ...grpc.CallOption) (Rendezvous_StreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Rendezvous_ServiceDesc.Streams[0], Rendezvous_Stream_FullMethodName, opts...)
+	stream, err := c.cc.NewStream(ctx, &Rendezvous_ServiceDesc.Streams[1], Rendezvous_Stream_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -72,6 +117,8 @@ func (x *rendezvousStreamClient) Recv() (*Frame, error) {
 // All implementations must embed UnimplementedRendezvousServer
 // for forward compatibility
 type RendezvousServer interface {
+	Listen(*Request, Rendezvous_ListenServer) error
+	Dial(context.Context, *Request) (*Response, error)
 	Stream(Rendezvous_StreamServer) error
 	mustEmbedUnimplementedRendezvousServer()
 }
@@ -80,6 +127,12 @@ type RendezvousServer interface {
 type UnimplementedRendezvousServer struct {
 }
 
+func (UnimplementedRendezvousServer) Listen(*Request, Rendezvous_ListenServer) error {
+	return status.Errorf(codes.Unimplemented, "method Listen not implemented")
+}
+func (UnimplementedRendezvousServer) Dial(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Dial not implemented")
+}
 func (UnimplementedRendezvousServer) Stream(Rendezvous_StreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method Stream not implemented")
 }
@@ -94,6 +147,45 @@ type UnsafeRendezvousServer interface {
 
 func RegisterRendezvousServer(s grpc.ServiceRegistrar, srv RendezvousServer) {
 	s.RegisterService(&Rendezvous_ServiceDesc, srv)
+}
+
+func _Rendezvous_Listen_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(Request)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(RendezvousServer).Listen(m, &rendezvousListenServer{stream})
+}
+
+type Rendezvous_ListenServer interface {
+	Send(*Response) error
+	grpc.ServerStream
+}
+
+type rendezvousListenServer struct {
+	grpc.ServerStream
+}
+
+func (x *rendezvousListenServer) Send(m *Response) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _Rendezvous_Dial_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RendezvousServer).Dial(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Rendezvous_Dial_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RendezvousServer).Dial(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Rendezvous_Stream_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -128,8 +220,18 @@ func (x *rendezvousStreamServer) Recv() (*Frame, error) {
 var Rendezvous_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "rendezvous.Rendezvous",
 	HandlerType: (*RendezvousServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Dial",
+			Handler:    _Rendezvous_Dial_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Listen",
+			Handler:       _Rendezvous_Listen_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "Stream",
 			Handler:       _Rendezvous_Stream_Handler,
