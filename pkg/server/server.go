@@ -30,9 +30,9 @@ func (s *RendezvousServer) Stream(stream pb.Rendezvous_StreamServer) error {
 		return status.Errorf(codes.InvalidArgument, "missing context")
 	}
 
-	id := md.Get("id")
+	id := md.Get("stream")
 	if len(id) != 1 {
-		return status.Errorf(codes.InvalidArgument, "missing id in context")
+		return status.Errorf(codes.InvalidArgument, "missing stream id in context")
 	}
 
 	// create new context for stream
