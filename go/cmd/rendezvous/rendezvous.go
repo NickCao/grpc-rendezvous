@@ -4,7 +4,7 @@ import (
 	"log"
 	"net"
 
-	"github.com/NickCao/grpc-rendezvous/pkg/server"
+	"github.com/NickCao/grpc-rendezvous/go/pkg/server"
 	pb "github.com/jumpstarter-dev/jumpstarter-protocol/go/jumpstarter/v1"
 	"google.golang.org/grpc"
 )

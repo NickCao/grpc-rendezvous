@@ -5,7 +5,7 @@ import (
 	"log"
 	"net"
 
-	st "github.com/NickCao/grpc-rendezvous/pkg/stream"
+	st "github.com/NickCao/grpc-rendezvous/go/pkg/stream"
 	pb "github.com/jumpstarter-dev/jumpstarter-protocol/go/jumpstarter/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
