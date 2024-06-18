@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+option go_package = "github.com/NickCao/grpc-rendezvous";
+
+package rendezvous;
+
+service Rendezvous {
+    rpc Stream(stream Frame) returns (stream Frame);
+}
+
+message Frame {
+    bytes payload = 1;
+}
