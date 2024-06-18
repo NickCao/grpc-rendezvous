@@ -28,6 +28,13 @@ type streamCtx struct {
 	stream pb.Rendezvous_StreamServer
 }
 
+func NewRendezvousServer() *RendezvousServer {
+	return &RendezvousServer{
+		listenMap: &sync.Map{},
+		streamMap: &sync.Map{},
+	}
+}
+
 func (s *RendezvousServer) Listen(req *pb.Request, stream pb.Rendezvous_ListenServer) error {
 	ctx, cancel := context.WithCancel(stream.Context())
 
