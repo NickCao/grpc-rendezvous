@@ -95,7 +95,7 @@ func (s *RendezvousServer) Stream(stream pb.Rendezvous_StreamServer) error {
 	}
 
 	// find stream with matching id
-	actual, loaded := s.streamMap.LoadOrStore(id, cond)
+	actual, loaded := s.streamMap.LoadOrStore(id[0], cond)
 	if loaded {
 		defer actual.(streamCtx).cancel()
 		return st.Forward(ctx, stream, actual.(streamCtx).stream)
