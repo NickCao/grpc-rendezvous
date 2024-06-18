@@ -46,6 +46,8 @@ func main() {
 			log.Fatal(err)
 		}
 
+		log.Printf("established connection: %s\n", resp.Stream)
+
 		go st.ForwardConn(ctx, stream, conn)
 	}
 }

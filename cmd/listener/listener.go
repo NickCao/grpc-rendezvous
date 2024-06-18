@@ -28,11 +28,15 @@ func main() {
 		log.Fatal(err)
 	}
 
+	log.Println("listening on address dummy")
+
 	for {
 		resp, err := listen.Recv()
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		log.Printf("new incoming connection: %s\n", resp.Stream)
 
 		ctx := metadata.NewOutgoingContext(context.TODO(), metadata.Pairs("stream", resp.Stream))
 
@@ -40,6 +44,8 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		log.Printf("established connection: %s\n", resp.Stream)
 
 		conn, err := net.Dial("tcp", "127.0.0.1:5201") // iperf3
 		if err != nil {
