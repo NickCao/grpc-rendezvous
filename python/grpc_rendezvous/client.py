@@ -21,7 +21,7 @@ async def main():
                 )
                 asyncio.create_task(forward(rendezvous, resp.stream, reader, writer))
 
-            server = await asyncio.start_server(handle, "127.0.0.1", 8003)
+            server = await asyncio.start_unix_server(handle, "/tmp/rendezvous-client.sock")
 
             async with server:
                 await server.serve_forever()
@@ -30,7 +30,7 @@ async def main():
 
     await asyncio.sleep(1)
 
-    async with grpc.aio.insecure_channel("127.0.0.1:8003") as channel:
+    async with grpc.aio.insecure_channel("unix:/tmp/rendezvous-client.sock") as channel:
         jumpstarter = jumpstarter_pb2_grpc.ForClientStub(channel)
 
         await jumpstarter.GetReport(empty_pb2.Empty())
