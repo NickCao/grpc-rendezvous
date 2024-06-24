@@ -4,7 +4,7 @@ go 1.22.3
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/jumpstarter-dev/jumpstarter-protocol/go v0.0.0-20240618155227-4c23f4752533
+	github.com/jumpstarter-dev/jumpstarter-protocol/go v0.0.0-20240624185442-677fa4f5ac91
 	golang.org/x/sync v0.6.0
 	google.golang.org/grpc v1.64.0
 	google.golang.org/protobuf v1.34.2

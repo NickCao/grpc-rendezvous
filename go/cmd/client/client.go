@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
+	"strings"
 
 	st "github.com/NickCao/grpc-rendezvous/go/pkg/stream"
 	pb "github.com/jumpstarter-dev/jumpstarter-protocol/go/jumpstarter/v1"
@@ -13,7 +15,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-func RendezvousDialer(ctx context.Context, address string) (net.Conn, error) {
+func RendezvousDialer(ctx context.Context, address string, token string) (net.Conn, error) {
 	client, err := grpc.NewClient(
 		"127.0.0.1:8000",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -22,10 +24,11 @@ func RendezvousDialer(ctx context.Context, address string) (net.Conn, error) {
 		return nil, err
 	}
 
-	rendezvous := pb.NewRendezvousServiceClient(client)
+	router := pb.NewRouterServiceClient(client)
 
-	resp, err := rendezvous.Dial(ctx, &pb.DialRequest{
-		Address: address,
+	resp, err := router.Dial(metadata.AppendToOutgoingContext(ctx,
+		"authorization", fmt.Sprintf("Bearer %s", token)), &pb.DialRequest{
+		Sub: address,
 	})
 	if err != nil {
 		return nil, err
@@ -34,7 +37,10 @@ func RendezvousDialer(ctx context.Context, address string) (net.Conn, error) {
 	// stream is not tied to dial context
 	ctx = context.Background()
 
-	stream, err := rendezvous.Stream(metadata.AppendToOutgoingContext(ctx, "stream", resp.Stream))
+	sc := pb.NewStreamServiceClient(client)
+
+	stream, err := sc.Stream(metadata.AppendToOutgoingContext(ctx,
+		"authorization", fmt.Sprintf("Bearer %s", resp.GetToken())))
 	if err != nil {
 		return nil, err
 	}
@@ -48,18 +54,36 @@ func RendezvousDialer(ctx context.Context, address string) (net.Conn, error) {
 
 func main() {
 	client, err := grpc.NewClient(
-		"unix:///dummy",
+		"127.0.0.1:8000",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithContextDialer(RendezvousDialer),
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	jumpstarter := pb.NewForClientClient(client)
+	controller := pb.NewControllerServiceClient(client)
 
-	_, err = jumpstarter.GetReport(context.TODO(), &emptypb.Empty{})
+	resp, err := controller.Register(context.TODO(), &pb.RegisterRequest{
+		Uuid: "client",
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	exporterClient, err := grpc.NewClient(
+		"unix:///exporter",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+			addr := strings.TrimPrefix(s, "unix:///")
+			return RendezvousDialer(ctx, addr, resp.GetRouterToken())
+		}),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	exporter := pb.NewExporterServiceClient(exporterClient)
+
+	_, err = exporter.GetReport(context.TODO(), &emptypb.Empty{})
+	log.Println(err)
 }

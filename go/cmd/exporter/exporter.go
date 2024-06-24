@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 
@@ -17,14 +18,15 @@ import (
 
 type RendezvousListner struct {
 	address RendezvousAddr
-	client  pb.RendezvousServiceClient
-	listen  pb.RendezvousService_ListenClient
+	router  pb.RouterServiceClient
+	stream  pb.StreamServiceClient
+	listen  pb.RouterService_ListenClient
 	cancel  context.CancelFunc
 }
 
 type RendezvousAddr string
 
-func NewRendezvousListner(ctx context.Context, address string) (*RendezvousListner, error) {
+func NewRendezvousListner(ctx context.Context, token string) (*RendezvousListner, error) {
 	client, err := grpc.NewClient(
 		"127.0.0.1:8000",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -33,21 +35,21 @@ func NewRendezvousListner(ctx context.Context, address string) (*RendezvousListn
 		return nil, err
 	}
 
-	rendezvous := pb.NewRendezvousServiceClient(client)
+	rendezvous := pb.NewRouterServiceClient(client)
 
 	ctx, cancel := context.WithCancel(ctx)
 
-	listen, err := rendezvous.Listen(ctx, &pb.ListenRequest{
-		Address: address,
-	})
+	listen, err := rendezvous.Listen(metadata.AppendToOutgoingContext(ctx,
+		"authorization", fmt.Sprintf("Bearer %s", token)), &pb.ListenRequest{})
 	if err != nil {
 		cancel()
 		return nil, err
 	}
 
 	return &RendezvousListner{
-		address: RendezvousAddr(address),
-		client:  rendezvous,
+		address: RendezvousAddr("rendezvous"),
+		stream:  pb.NewStreamServiceClient(client),
+		router:  rendezvous,
 		listen:  listen,
 		cancel:  cancel,
 	}, nil
@@ -61,7 +63,8 @@ func (l *RendezvousListner) Accept() (net.Conn, error) {
 
 	ctx := l.listen.Context()
 
-	stream, err := l.client.Stream(metadata.AppendToOutgoingContext(ctx, "stream", resp.Stream))
+	stream, err := l.stream.Stream(metadata.AppendToOutgoingContext(context.TODO(), // FIXME: drop authorization context
+		"authorization", fmt.Sprintf("Bearer %s", resp.GetToken())))
 	if err != nil {
 		return nil, err
 	}
@@ -90,23 +93,37 @@ func (a RendezvousAddr) String() string {
 	return string(a)
 }
 
-type ForClientServer struct {
-	pb.UnimplementedForClientServer
+type ExporterServer struct {
+	pb.UnimplementedExporterServiceServer
 }
 
-func (c *ForClientServer) GetReport(context.Context, *emptypb.Empty) (*pb.ExporterReport, error) {
-	return nil, status.Errorf(codes.Internal, "dummy implementation")
+func (c *ExporterServer) GetReport(context.Context, *emptypb.Empty) (*pb.GetReportResponse, error) {
+	return nil, status.Errorf(codes.Internal, "dummy implementation in go")
 }
 
 func main() {
-	listen, err := NewRendezvousListner(context.Background(), "unix:///dummy")
+	client, err := grpc.NewClient(
+		"127.0.0.1:8000",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	controller := pb.NewControllerServiceClient(client)
+
+	resp, err := controller.Register(context.TODO(), &pb.RegisterRequest{
+		Uuid: "exporter",
+	})
+
+	listen, err := NewRendezvousListner(context.Background(), resp.GetRouterToken())
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	server := grpc.NewServer()
 
-	pb.RegisterForClientServer(server, &ForClientServer{})
+	pb.RegisterExporterServiceServer(server, &ExporterServer{})
 
 	err = server.Serve(listen)
 	if err != nil {
