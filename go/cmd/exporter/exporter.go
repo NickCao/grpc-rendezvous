@@ -2,86 +2,84 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net"
+	"time"
 
 	st "github.com/NickCao/grpc-rendezvous/go/pkg/stream"
+	"github.com/NickCao/grpc-rendezvous/go/pkg/token"
+	"github.com/golang-jwt/jwt/v5"
 	pb "github.com/jumpstarter-dev/jumpstarter-protocol/go/jumpstarter/v1"
+	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/credentials/local"
+	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-type RendezvousListner struct {
+type RendezvousListener struct {
 	address RendezvousAddr
 	router  pb.RouterServiceClient
-	stream  pb.StreamServiceClient
-	listen  pb.RouterService_ListenClient
+	listen  pb.ControllerService_ListenClient
 	cancel  context.CancelFunc
 }
 
 type RendezvousAddr string
 
-func NewRendezvousListner(ctx context.Context, token string) (*RendezvousListner, error) {
-	client, err := grpc.NewClient(
-		"127.0.0.1:8000",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	rendezvous := pb.NewRouterServiceClient(client)
-
+func NewRendezvousListener(ctx context.Context, controller pb.ControllerServiceClient) (*RendezvousListener, error) {
 	ctx, cancel := context.WithCancel(ctx)
 
-	listen, err := rendezvous.Listen(metadata.AppendToOutgoingContext(ctx,
-		"authorization", fmt.Sprintf("Bearer %s", token)), &pb.ListenRequest{})
+	listen, err := controller.Listen(ctx, &pb.ListenRequest{})
 	if err != nil {
 		cancel()
 		return nil, err
 	}
 
-	return &RendezvousListner{
-		address: RendezvousAddr("rendezvous"),
-		stream:  pb.NewStreamServiceClient(client),
-		router:  rendezvous,
+	return &RendezvousListener{
+		address: RendezvousAddr("dummy"),
 		listen:  listen,
 		cancel:  cancel,
 	}, nil
 }
 
-func (l *RendezvousListner) Accept() (net.Conn, error) {
+func (l *RendezvousListener) Accept() (net.Conn, error) {
 	resp, err := l.listen.Recv()
 	if err != nil {
 		return nil, err
 	}
 
-	ctx := l.listen.Context()
+	client, err := grpc.NewClient(resp.GetRouterEndpoint(),
+		grpc.WithTransportCredentials(local.NewCredentials()),
+		grpc.WithPerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(&oauth2.Token{
+			AccessToken: resp.GetRouterToken(),
+		})}),
+	)
+	if err != nil {
+		return nil, err
+	}
 
-	stream, err := l.stream.Stream(metadata.AppendToOutgoingContext(context.TODO(), // FIXME: drop authorization context
-		"authorization", fmt.Sprintf("Bearer %s", resp.GetToken())))
+	router := pb.NewRouterServiceClient(client)
+
+	stream, err := router.Stream(context.TODO())
 	if err != nil {
 		return nil, err
 	}
 
 	tx, rx := net.Pipe()
 
-	go st.ForwardConn(ctx, stream, tx)
+	go st.ForwardConn(l.listen.Context(), stream, tx)
 
 	return rx, nil
 }
 
-func (l *RendezvousListner) Close() error {
+func (l *RendezvousListener) Close() error {
 	l.cancel()
 	return nil
 }
 
-func (l *RendezvousListner) Addr() net.Addr {
+func (l *RendezvousListener) Addr() net.Addr {
 	return l.address
 }
 
@@ -103,8 +101,11 @@ func (c *ExporterServer) GetReport(context.Context, *emptypb.Empty) (*pb.GetRepo
 
 func main() {
 	client, err := grpc.NewClient(
-		"127.0.0.1:8000",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		"unix:/tmp/jumpstarter-controller.sock",
+		grpc.WithTransportCredentials(local.NewCredentials()),
+		grpc.WithPerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(&oauth2.Token{
+			AccessToken: token.Token("exporter-01", jwt.NewNumericDate(time.Now().Add(time.Hour))),
+		})}),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -112,11 +113,7 @@ func main() {
 
 	controller := pb.NewControllerServiceClient(client)
 
-	resp, err := controller.Register(context.TODO(), &pb.RegisterRequest{
-		Uuid: "exporter",
-	})
-
-	listen, err := NewRendezvousListner(context.Background(), resp.GetRouterToken())
+	listen, err := NewRendezvousListener(context.TODO(), controller)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -10,7 +10,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func ForwardConn(ctx context.Context, stream pb.StreamService_StreamClient, conn net.Conn) error {
+func ForwardConn(ctx context.Context, stream pb.RouterService_StreamClient, conn net.Conn) error {
 	g, _ := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
