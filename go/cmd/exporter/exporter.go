@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/local"
 	"google.golang.org/grpc/credentials/oauth"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -113,17 +114,14 @@ func main() {
 
 	controller := pb.NewControllerServiceClient(client)
 
-	listen, err := NewRendezvousListener(context.TODO(), controller)
-	if err != nil {
-		log.Fatal(err)
-	}
+	log.Println(controller.Register(
+		metadata.AppendToOutgoingContext(
+			context.Background(),
+			"namespace", "default",
+			"name", "exporter-01",
+			"token", "supersecret",
+		),
+		&pb.RegisterRequest{},
+	))
 
-	server := grpc.NewServer()
-
-	pb.RegisterExporterServiceServer(server, &ExporterServer{})
-
-	err = server.Serve(listen)
-	if err != nil {
-		log.Fatal(err)
-	}
 }
