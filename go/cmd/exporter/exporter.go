@@ -2,20 +2,15 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
-	"time"
 
 	st "github.com/NickCao/grpc-rendezvous/go/pkg/stream"
-	"github.com/NickCao/grpc-rendezvous/go/pkg/token"
-	"github.com/golang-jwt/jwt/v5"
 	pb "github.com/jumpstarter-dev/jumpstarter-protocol/go/jumpstarter/v1"
-	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/local"
-	"google.golang.org/grpc/credentials/oauth"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -53,9 +48,9 @@ func (l *RendezvousListener) Accept() (net.Conn, error) {
 
 	client, err := grpc.NewClient(resp.GetRouterEndpoint(),
 		grpc.WithTransportCredentials(local.NewCredentials()),
-		grpc.WithPerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(&oauth2.Token{
-			AccessToken: resp.GetRouterToken(),
-		})}),
+		grpc.WithPerRPCCredentials(StaticCredential{
+			"Authorization": fmt.Sprintf("Bearer %s", resp.RouterToken),
+		}),
 	)
 	if err != nil {
 		return nil, err
@@ -100,13 +95,24 @@ func (c *ExporterServer) GetReport(context.Context, *emptypb.Empty) (*pb.GetRepo
 	return nil, status.Errorf(codes.Internal, "dummy implementation in go")
 }
 
+type StaticCredential map[string]string
+
+func (c StaticCredential) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return c, nil
+}
+func (c StaticCredential) RequireTransportSecurity() bool {
+	return false
+}
+
 func main() {
 	client, err := grpc.NewClient(
-		"unix:/tmp/jumpstarter-controller.sock",
+		"127.0.0.1:8082",
 		grpc.WithTransportCredentials(local.NewCredentials()),
-		grpc.WithPerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(&oauth2.Token{
-			AccessToken: token.Token("exporter-01", jwt.NewNumericDate(time.Now().Add(time.Hour))),
-		})}),
+		grpc.WithPerRPCCredentials(StaticCredential{
+			"namespace": "default",
+			"name":      "exporter-01",
+			"token":     "supersecret",
+		}),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -115,13 +121,26 @@ func main() {
 	controller := pb.NewControllerServiceClient(client)
 
 	log.Println(controller.Register(
-		metadata.AppendToOutgoingContext(
-			context.Background(),
-			"namespace", "default",
-			"name", "exporter-01",
-			"token", "supersecret",
-		),
+		context.Background(),
 		&pb.RegisterRequest{},
 	))
 
+	log.Println(controller.Bye(
+		context.Background(),
+		&pb.ByeRequest{Reason: "maintenance"},
+	))
+
+	listen, err := NewRendezvousListener(context.TODO(), controller)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	server := grpc.NewServer()
+
+	pb.RegisterExporterServiceServer(server, &ExporterServer{})
+
+	err = server.Serve(listen)
+	if err != nil {
+		log.Fatal(err)
+	}
 }

@@ -2,19 +2,15 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"strings"
-	"time"
 
 	st "github.com/NickCao/grpc-rendezvous/go/pkg/stream"
-	"github.com/NickCao/grpc-rendezvous/go/pkg/token"
-	"github.com/golang-jwt/jwt/v5"
 	pb "github.com/jumpstarter-dev/jumpstarter-protocol/go/jumpstarter/v1"
-	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/local"
-	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -29,6 +25,15 @@ func (c *fakeUnixConn) RemoteAddr() net.Addr {
 	}
 }
 
+type StaticCredential map[string]string
+
+func (c StaticCredential) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return c, nil
+}
+func (c StaticCredential) RequireTransportSecurity() bool {
+	return false
+}
+
 func RendezvousDialer(ctx context.Context, address string, controller pb.ControllerServiceClient) (net.Conn, error) {
 	resp, err := controller.Dial(ctx, &pb.DialRequest{
 		Uuid: address,
@@ -40,9 +45,9 @@ func RendezvousDialer(ctx context.Context, address string, controller pb.Control
 	client, err := grpc.NewClient(
 		resp.GetRouterEndpoint(),
 		grpc.WithTransportCredentials(local.NewCredentials()),
-		grpc.WithPerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(&oauth2.Token{
-			AccessToken: resp.GetRouterToken(),
-		})}),
+		grpc.WithPerRPCCredentials(StaticCredential{
+			"Authorization": fmt.Sprintf("Bearer %s", resp.RouterToken),
+		}),
 	)
 	if err != nil {
 		return nil, err
@@ -65,11 +70,8 @@ func RendezvousDialer(ctx context.Context, address string, controller pb.Control
 
 func main() {
 	client, err := grpc.NewClient(
-		"unix:/tmp/jumpstarter-controller.sock",
+		"127.0.0.1:8082",
 		grpc.WithTransportCredentials(local.NewCredentials()),
-		grpc.WithPerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(&oauth2.Token{
-			AccessToken: token.Token("client-01", jwt.NewNumericDate(time.Now().Add(time.Hour))),
-		})}),
 	)
 	if err != nil {
 		log.Fatal(err)
