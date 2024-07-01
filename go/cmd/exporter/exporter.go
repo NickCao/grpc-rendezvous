@@ -7,6 +7,7 @@ import (
 	"net"
 
 	st "github.com/NickCao/grpc-rendezvous/go/pkg/stream"
+	"github.com/google/uuid"
 	pb "github.com/jumpstarter-dev/jumpstarter-protocol/go/jumpstarter/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -122,7 +123,34 @@ func main() {
 
 	log.Println(controller.Register(
 		context.Background(),
-		&pb.RegisterRequest{},
+		&pb.RegisterRequest{
+			DeviceReport: []*pb.DeviceReport{
+				{
+					DeviceUuid:       uuid.New().String(),
+					ParentDeviceUuid: nil,
+					DriverInterface:  "uart",
+					Labels: map[string]string{
+						"name": "ttyUSB0",
+					},
+				},
+				{
+					DeviceUuid:       uuid.New().String(),
+					ParentDeviceUuid: nil,
+					DriverInterface:  "uart",
+					Labels: map[string]string{
+						"name": "ttyUSB1",
+					},
+				},
+				{
+					DeviceUuid:       uuid.New().String(),
+					ParentDeviceUuid: nil,
+					DriverInterface:  "v4l2",
+					Labels: map[string]string{
+						"name": "video0",
+					},
+				},
+			},
+		},
 	))
 
 	log.Println(controller.Bye(
