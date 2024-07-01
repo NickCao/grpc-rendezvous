@@ -80,7 +80,7 @@ func main() {
 	controller := pb.NewControllerServiceClient(client)
 
 	exporterClient, err := grpc.NewClient(
-		"unix:///exporter-01",
+		"unix:///exporter-sample",
 		grpc.WithTransportCredentials(local.NewCredentials()),
 		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
 			addr := strings.TrimPrefix(s, "unix:///")

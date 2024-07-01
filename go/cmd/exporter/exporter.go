@@ -110,8 +110,8 @@ func main() {
 		grpc.WithTransportCredentials(local.NewCredentials()),
 		grpc.WithPerRPCCredentials(StaticCredential{
 			"namespace": "default",
-			"name":      "exporter-01",
-			"token":     "supersecret",
+			"name":      "exporter-sample",
+			"token":     "54d8cd395728888be9fcb93c4575d99e",
 		}),
 	)
 	if err != nil {
