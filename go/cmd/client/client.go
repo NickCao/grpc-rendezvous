@@ -2,7 +2,8 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"encoding/base64"
+	"encoding/json"
 	"io"
 	"log"
 	"net"
@@ -50,7 +51,7 @@ func RendezvousDialer(ctx context.Context, address string, device *string, contr
 		resp.GetRouterEndpoint(),
 		grpc.WithTransportCredentials(local.NewCredentials()),
 		grpc.WithPerRPCCredentials(StaticCredential{
-			"Authorization": fmt.Sprintf("Bearer %s", resp.RouterToken),
+			"authorization": "Bearer " + resp.RouterToken,
 		}),
 	)
 	if err != nil {
@@ -73,9 +74,21 @@ func RendezvousDialer(ctx context.Context, address string, device *string, contr
 }
 
 func main() {
+	encoded, err := json.Marshal(map[string]string{
+		"namespace": "default",
+		"name":      "identity-sample",
+		"token":     "fc5c6dda1083a69e9886dc160de5b44e",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	client, err := grpc.NewClient(
 		"127.0.0.1:8082",
 		grpc.WithTransportCredentials(local.NewCredentials()),
+		grpc.WithPerRPCCredentials(StaticCredential{
+			"authorization": "Bearer " + base64.StdEncoding.EncodeToString(encoded),
+		}),
 	)
 	if err != nil {
 		log.Fatal(err)
