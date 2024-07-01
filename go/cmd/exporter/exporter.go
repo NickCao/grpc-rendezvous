@@ -64,11 +64,22 @@ func (l *RendezvousListener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 
-	tx, rx := net.Pipe()
+	if resp.DeviceUuid != nil {
+		tx, err := net.Dial("tcp", "127.0.0.1:8023")
+		if err != nil {
+			return nil, err
+		}
 
-	go st.ForwardConn(l.listen.Context(), stream, tx)
+		go st.ForwardConn(l.listen.Context(), stream, tx)
 
-	return rx, nil
+		return l.Accept()
+	} else {
+		tx, rx := net.Pipe()
+
+		go st.ForwardConn(l.listen.Context(), stream, tx)
+
+		return rx, nil
+	}
 }
 
 func (l *RendezvousListener) Close() error {
