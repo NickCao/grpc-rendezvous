@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net"
+	"os"
 	"strings"
 
 	st "github.com/NickCao/grpc-rendezvous/go/pkg/stream"
 	pb "github.com/jumpstarter-dev/jumpstarter-protocol/go/jumpstarter/v1"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/local"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -34,9 +37,10 @@ func (c StaticCredential) RequireTransportSecurity() bool {
 	return false
 }
 
-func RendezvousDialer(ctx context.Context, address string, controller pb.ControllerServiceClient) (net.Conn, error) {
+func RendezvousDialer(ctx context.Context, address string, device *string, controller pb.ControllerServiceClient) (net.Conn, error) {
 	resp, err := controller.Dial(ctx, &pb.DialRequest{
-		Uuid: address,
+		Uuid:       address,
+		DeviceUuid: device,
 	})
 	if err != nil {
 		return nil, err
@@ -84,7 +88,7 @@ func main() {
 		grpc.WithTransportCredentials(local.NewCredentials()),
 		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
 			addr := strings.TrimPrefix(s, "unix:///")
-			return RendezvousDialer(ctx, addr, controller)
+			return RendezvousDialer(ctx, addr, nil, controller)
 		}),
 	)
 
@@ -96,4 +100,21 @@ func main() {
 
 	_, err = exporter.GetReport(context.TODO(), &emptypb.Empty{})
 	log.Println(err)
+
+	deviceUuid := "somedevice"
+	conn, err := RendezvousDialer(context.Background(), "exporter-sample", &deviceUuid, controller)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	g := new(errgroup.Group)
+	g.Go(func() error {
+		_, err := io.Copy(os.Stdout, conn)
+		return err
+	})
+	g.Go(func() error {
+		_, err := io.Copy(conn, os.Stdin)
+		return err
+	})
+	g.Wait()
 }
