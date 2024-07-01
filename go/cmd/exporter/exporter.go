@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -117,13 +119,20 @@ func (c StaticCredential) RequireTransportSecurity() bool {
 }
 
 func main() {
+	encoded, err := json.Marshal(map[string]string{
+		"namespace": "default",
+		"name":      "exporter-sample",
+		"token":     "54d8cd395728888be9fcb93c4575d99e",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	client, err := grpc.NewClient(
 		"127.0.0.1:8082",
 		grpc.WithTransportCredentials(local.NewCredentials()),
 		grpc.WithPerRPCCredentials(StaticCredential{
-			"namespace": "default",
-			"name":      "exporter-sample",
-			"token":     "54d8cd395728888be9fcb93c4575d99e",
+			"authorization": "Bearer " + base64.StdEncoding.EncodeToString(encoded),
 		}),
 	)
 	if err != nil {
